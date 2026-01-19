@@ -1,0 +1,26 @@
+name: KBTU 2-Minute Attendance Bot
+
+on:
+  schedule:
+    # Запуск каждые 20 минут круглосуточно
+    - cron: '*/20 * * * *'
+  workflow_dispatch: # Кнопка для ручного запуска
+
+jobs:
+  attendance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: |
+          pip install playwright
+          playwright install chromium
+      - name: Run Bot
+        env:
+          WSP_LOGIN: ${{ secrets.WSP_LOGIN }}
+          WSP_PASSWORD: ${{ secrets.WSP_PASSWORD }}
+        run: python bot.py
