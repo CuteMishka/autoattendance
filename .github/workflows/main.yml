@@ -1,8 +1,9 @@
-name: KBTU Scheduled Attendance Bot
+name: KBTU Ultra-Reliable Bot
 
 on:
   schedule:
-    # Пн-Вт (1-2), запуски в :00 и :30 каждого часа с 03:00 до 06:59 UTC
+    # Пн-Вт (1-2). Запуски каждые 30 минут.
+    # Окно: 03:00 - 07:00 UTC (08:00 - 12:00 Алматы)
     - cron: '0,30 3-6 * * 1-2'
   workflow_dispatch:
 
