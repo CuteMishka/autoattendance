@@ -17,21 +17,46 @@ def send_telegram(message):
 
 def check_and_click(page):
     try:
+        # Поиск кнопки по тексту на двух языках
         pattern = re.compile(r"Отметиться|Белгілену", re.IGNORECASE)
         attendance_buttons = page.locator(".v-button-caption").get_by_text(pattern)
         
         count = attendance_buttons.count()
         if count > 0:
             for i in range(count):
-                attendance_buttons.nth(i).click()
-                msg = "✅ Успешно: Отметка на портале WSP поставлена!"
-                print(msg)
-                send_telegram(msg)
-                time.sleep(2)
+                # Нажимаем только если кнопка видна и доступна
+                if attendance_buttons.nth(i).is_visible():
+                    attendance_buttons.nth(i).click()
+                    msg = f"✅ Успешно: Отметка поставлена в {time.strftime('%H:%M:%S')}"
+                    print(msg)
+                    send_telegram(msg)
+                    time.sleep(5) # Пауза после клика
             return True
         return False
     except Exception as e:
         print(f"Ошибка при поиске кнопки: {e}")
+        return False
+
+def login_to_wsp(page, login, password):
+    """Функция для (пере)авторизации на портале."""
+    try:
+        page.goto("https://wsp.kbtu.kz/RegistrationOnline")
+        page.wait_for_timeout(5000)
+
+        # Выбор русского языка
+        russian_flag = page.locator('img[src*="flags/ru.png"]')
+        if russian_flag.is_visible():
+            russian_flag.click()
+            page.wait_for_timeout(3000)
+
+        # Заполнение данных
+        page.fill('input#gwt-uid-4', login)
+        page.fill('input#gwt-uid-6', password)
+        page.click('div.v-button-primary')
+        page.wait_for_timeout(10000)
+        return True
+    except Exception as e:
+        print(f"Ошибка авторизации: {e}")
         return False
 
 def run_attendance():
@@ -39,54 +64,37 @@ def run_attendance():
     PASSWORD = os.environ.get('WSP_PASSWORD')
 
     with sync_playwright() as p:
+        # Запуск браузера с увеличенным таймаутом
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
+        context = browser.new_context(viewport={'width': 1280, 'height': 720})
         page = context.new_page()
 
         try:
-            start_time = time.strftime('%H:%M')
-            print(f"--- Старт сессии: {start_time} ---")
-            
-            # Начальная авторизация
-            page.goto("https://wsp.kbtu.kz/RegistrationOnline")
-            page.wait_for_timeout(5000)
+            print(f"--- Старт сессии мониторинга: {time.strftime('%H:%M:%S')} ---")
+            login_to_wsp(page, LOGIN, PASSWORD)
 
-            # Переключение языка
-            russian_flag = page.locator('img[src*="flags/ru.png"]')
-            if russian_flag.is_visible():
-                russian_flag.click()
-                page.wait_for_timeout(3000)
+            # Цикл на 55 минут (110 итераций по 30 секунд)
+            for attempt in range(110):
+                # Если нас выкинуло на страницу логина — заходим снова
+                if page.locator('input#gwt-uid-4').is_visible():
+                    print("Сессия потеряна, перелогин...")
+                    login_to_wsp(page, LOGIN, PASSWORD)
 
-            # Вход
-            page.fill('input#gwt-uid-4', LOGIN)
-            page.fill('input#gwt-uid-6', PASSWORD)
-            page.click('div.v-button-primary')
-            page.wait_for_timeout(10000)
-
-            # Цикл мониторинга: 28 минут (28 попыток по 1 минуте)
-            for attempt in range(28):
-                print(f"Попытка {attempt + 1}/28 (Время: {time.strftime('%H:%M:%S')})")
-                
                 check_and_click(page)
                 
-                if attempt < 27:
-                    time.sleep(60) # Ждем 1 минуту
+                # Обновляем страницу каждые 30 секунд для проверки кнопки
+                time.sleep(30)
+                try:
                     page.reload()
                     page.wait_for_timeout(5000)
-                    
-                    # Если после перезагрузки выкинуло на страницу входа
-                    if page.locator('input#gwt-uid-4').is_visible():
-                        print("Сессия истекла, перезаходим...")
-                        page.fill('input#gwt-uid-4', LOGIN)
-                        page.fill('input#gwt-uid-6', PASSWORD)
-                        page.click('div.v-button-primary')
-                        page.wait_for_timeout(8000)
+                except:
+                    page.goto("https://wsp.kbtu.kz/RegistrationOnline")
 
         except Exception as e:
-            print(f"Критическая ошибка: {e}")
+            send_telegram(f"⚠️ Бот столкнулся с ошибкой: {e}")
         finally:
             browser.close()
-            print("--- Сессия завершена ---")
+            print(f"--- Завершение сессии: {time.strftime('%H:%M:%S')} ---")
 
 if __name__ == "__main__":
     run_attendance()
