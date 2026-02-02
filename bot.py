@@ -5,7 +5,6 @@ import requests
 from playwright.sync_api import sync_playwright
 
 def send_telegram(message):
-    """Отправляет уведомление в Telegram."""
     token = os.environ.get('TELEGRAM_TOKEN')
     chat_id = os.environ.get('TELEGRAM_CHAT_ID')
     if token and chat_id:
@@ -17,9 +16,7 @@ def send_telegram(message):
             print(f"Ошибка отправки в Telegram: {e}")
 
 def check_and_click(page):
-    """Ищет кнопку отметки и нажимает её."""
     try:
-        # Регулярное выражение для поиска на русском и казахском
         pattern = re.compile(r"Отметиться|Белгілену", re.IGNORECASE)
         attendance_buttons = page.locator(".v-button-caption").get_by_text(pattern)
         
@@ -47,42 +44,46 @@ def run_attendance():
         page = context.new_page()
 
         try:
-            # Отправляем сообщение один раз за запуск воркфлоу
             start_time = time.strftime('%H:%M')
-            send_telegram(f"🚀 Запуск сессии мониторинга ({start_time}). Проверяю каждые 2 минуты...")
-
             print(f"--- Старт сессии: {start_time} ---")
+            
+            # Начальная авторизация
             page.goto("https://wsp.kbtu.kz/RegistrationOnline")
             page.wait_for_timeout(5000)
 
-            # ШАГ 1: Переключение на русский язык через флаг
+            # Переключение языка
             russian_flag = page.locator('img[src*="flags/ru.png"]')
             if russian_flag.is_visible():
                 russian_flag.click()
-                print("Язык переключен на русский.")
                 page.wait_for_timeout(3000)
 
-            # ШАГ 2: Авторизация
+            # Вход
             page.fill('input#gwt-uid-4', LOGIN)
             page.fill('input#gwt-uid-6', PASSWORD)
             page.click('div.v-button-primary')
             page.wait_for_timeout(10000)
 
-            # ШАГ 3: Цикл мониторинга (9 попыток)
-            for attempt in range(9):
-                print(f"Попытка {attempt + 1}/9...")
+            # Цикл мониторинга: 28 минут (28 попыток по 1 минуте)
+            for attempt in range(28):
+                print(f"Попытка {attempt + 1}/28 (Время: {time.strftime('%H:%M:%S')})")
                 
-                # Если нашли кнопку — отметимся (функция сама отправит ТГ-сообщение об успехе)
                 check_and_click(page)
                 
-                if attempt < 8:
-                    time.sleep(120) # Пауза 2 минуты
+                if attempt < 27:
+                    time.sleep(60) # Ждем 1 минуту
                     page.reload()
-                    page.wait_for_timeout(10000)
+                    page.wait_for_timeout(5000)
+                    
+                    # Если после перезагрузки выкинуло на страницу входа
+                    if page.locator('input#gwt-uid-4').is_visible():
+                        print("Сессия истекла, перезаходим...")
+                        page.fill('input#gwt-uid-4', LOGIN)
+                        page.fill('input#gwt-uid-6', PASSWORD)
+                        page.click('div.v-button-primary')
+                        page.wait_for_timeout(8000)
 
         except Exception as e:
-            print(f"Ошибка: {e}")
-            # Опционально: send_telegram(f"❌ Сбой бота: {e}")
+            print(f"Критическая ошибка: {e}")
         finally:
             browser.close()
             print("--- Сессия завершена ---")
