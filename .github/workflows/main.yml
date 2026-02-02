@@ -3,23 +3,29 @@ name: KBTU Ultra-Reliable Bot
 on:
   schedule:
     # Пн-Вт (1-2). Запуски каждые 30 минут.
-    # Окно: 03:00 - 07:00 UTC (08:00 - 12:00 Алматы)
-    - cron: '0,30 3-6 * * 1-2'
-  workflow_dispatch:
+    # 00:00 UTC — это 05:00 утра по Алматы.
+    # Диапазон 0-6 UTC охватывает время с 05:00 до 11:59 по Алматы.
+    # Последний запуск в 06:30 UTC (11:30 Алматы) проработает 55 минут до ~12:25.
+    - cron: '0,30 0-6 * * 1-2'
+  workflow_dispatch: # Позволяет запускать бота вручную через вкладку Actions
 
 jobs:
   attendance:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
+
       - name: Install dependencies
         run: |
           pip install playwright requests
           playwright install chromium
+
       - name: Run Bot
         env:
           WSP_LOGIN: ${{ secrets.WSP_LOGIN }}
